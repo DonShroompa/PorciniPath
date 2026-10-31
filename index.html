@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Mushroom Habitat Map</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #fbfaf7; --text: #2b2620; --muted: #6f665c; --line: #e4ded4;
+    --accent: #8a4b2a; --chip: #f1ece4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1916; --panel: #23201c; --text: #ece6dc; --muted: #a59b8f; --line: #3a352f;
+      --accent: #e0a070; --chip: #2e2a25;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1916; --panel: #23201c; --text: #ece6dc; --muted: #a59b8f; --line: #3a352f;
+    --accent: #e0a070; --chip: #2e2a25;
+  }
+  * { box-sizing: border-box; }
+  button, select, input { font-family: inherit; }   /* Safari doesn't inherit fonts in form controls */
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: flex; height: 100%; }
+  #panel { width: 320px; flex: none; overflow-y: auto; background: var(--panel);
+    border-right: 1px solid var(--line); padding: 14px 16px 24px; }
+  #map { flex: 1; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 16px 0 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+  label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .row { display: grid; grid-template-columns: 92px 1fr 34px; align-items: center; gap: 6px; margin: 3px 0; }
+  .row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .views label { padding: 2px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .legend { height: 10px; border-radius: 3px; margin: 4px 0 2px; }
+  .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  #info { font-size: 12px; background: var(--chip); border-radius: 6px; padding: 8px; min-height: 36px; }
+  #info table, .pop table { border-collapse: collapse; width: 100%; }
+  #info td, .pop td { padding: 1px 0; }
+  #info td:last-child, .pop td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  #top { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+  #top li { padding: 3px 0; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  #top li:hover { color: var(--accent); }
+  .muted { color: var(--muted); }
+  #status { font-size: 12px; color: var(--accent); }
+  .pixelated { image-rendering: pixelated; }
+  .pop h3 { margin: 0 0 2px; font-size: 14px; }
+  .pop .tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; background: #f3d9c6; color: #6b3518; }
+  .rule { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; color: #fff; }
+  .rl { margin-top: 4px; }
+  .rl > div { margin: 2px 0 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .akey { display: grid; grid-template-columns: 26px 1fr; gap: 2px 6px; align-items: center; font-size: 12px; margin: 6px 0; }
+  .akey i { display: block; height: 0; border-top: 3px solid; }
+  #here { font-size: 12px; }
+  .near { list-style: none; margin: 2px 0 0; padding: 0; }
+  .near li { padding: 3px 0; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  .near li:hover { color: var(--accent); }
+  /* locate button: off / tracking / following */
+  .locate { width: 34px; height: 34px; line-height: 34px; text-align: center; font-size: 20px;
+    background: #fff; color: #333; text-decoration: none; }
+  .locate.on { color: #1565c0; }
+  .locate.follow { background: #1565c0; color: #fff; }
+  /* own position: blue dot, heading arrow when moving */
+  .me { position: relative; width: 36px; height: 36px; }
+  .me-dot { position: absolute; left: 11px; top: 11px; width: 14px; height: 14px; border-radius: 50%;
+    background: #1e88e5; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 8px rgba(30,136,229,.6); }
+  .me-arrow { position: absolute; inset: 0; }
+  .me-arrow::before { content: ""; position: absolute; left: 12px; top: 0; border: 6px solid transparent;
+    border-bottom: 11px solid #1e88e5; }
+  #species { width: 100%; font: inherit; padding: 4px 6px; margin: 4px 0 6px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; }
+  .card { font-size: 12px; background: var(--chip); border-radius: 6px; padding: 8px; margin-bottom: 4px; }
+  .card > div { margin-top: 4px; }
+  .warn { color: #b26a00; }
+  .rec { margin: 4px 0; padding: 4px 6px; border-radius: 6px; background: #e3f1e4; color: #1b5e20; }
+  .recring { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 3px solid #2e7d32;
+    vertical-align: middle; }
+  /* iNaturalist finds: teal diamond with a white border */
+  .find { width: 12px; height: 12px; background: #00897b; border: 2px solid #fff; transform: rotate(45deg);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.45); box-sizing: border-box; }
+  .findkey { display: inline-block; width: 10px; height: 10px; background: #00897b; border: 2px solid #fff;
+    transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(0,0,0,.45); margin: 0 3px; vertical-align: middle; }
+  /* About & sources: tiny button, modal over the map */
+  .aboutbtn { border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 0 2px;
+    vertical-align: middle; }
+  .aboutbtn:hover { color: var(--accent); }
+  #about { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.45); display: flex;
+    align-items: center; justify-content: center; }
+  #about[hidden] { display: none; }
+  #about .box { background: var(--bg); color: var(--text); width: min(720px, 92vw); max-height: 86vh; overflow-y: auto;
+    border-radius: 8px; padding: 18px 22px; font-size: 13px; box-shadow: 0 8px 30px rgba(0,0,0,.35); position: relative; }
+  #about h2 { margin-top: 14px; }
+  #about ul { margin: 4px 0; padding-left: 18px; }
+  #about li { margin: 2px 0; }
+  #about a { color: var(--accent); }
+  #aboutClose { position: absolute; top: 8px; right: 12px; border: 0; background: none; font-size: 22px;
+    color: var(--muted); cursor: pointer; }
+  #toggle { display: none; }
+  #grab, #peek { display: none; }
+  #debugLog { font: 10px/1.3 ui-monospace, Menlo, Consolas, monospace; background: #222; color: #9f9; padding: 6px;
+    border-radius: 6px; white-space: pre-wrap; word-break: break-all; max-height: 40vh; overflow-y: auto; margin: 6px 0; }
+  .uibtn { font-size: 11px; }
+  .bigbtn { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--chip);
+    color: var(--text); cursor: pointer; }
+  #detail { position: relative; font-size: 13px; background: var(--chip); border-radius: 8px; padding: 10px 12px; margin: 6px 0 10px; }
+  #detail .dclose { position: absolute; top: 2px; right: 6px; border: 0; background: none; font-size: 24px; color: var(--muted); cursor: pointer; }
+
+  /* ---------------- phone view (body.phone): full-screen map, the panel becomes a bottom drawer ---------------- */
+  body.phone { font-size: 15px; overscroll-behavior: none; }
+  body.phone #app { display: block; }
+  body.phone #map { position: fixed; inset: 0; }
+  body.phone #panel { position: fixed; left: 0; right: 0; bottom: 0; width: auto; z-index: 1000; border-right: 0;
+    border-radius: 14px 14px 0 0; box-shadow: 0 -4px 18px rgba(0,0,0,.25); padding: 0 14px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto; overscroll-behavior: contain; transition: height .2s ease; -webkit-overflow-scrolling: touch; }
+  body.phone[data-sheet="peek"] #panel { height: calc(144px + env(safe-area-inset-bottom)); overflow: hidden; }
+  body.phone[data-sheet="peek"] #panel > :not(#sheetHead) { visibility: hidden; }   /* collapsed: header only */
+  body.phone[data-sheet="half"] #panel { height: 52vh; height: 52dvh; }
+  body.phone[data-sheet="full"] #panel { height: 90vh; height: 90dvh; }
+  body.phone #sheetHead { position: sticky; top: 0; z-index: 2; background: var(--panel); margin: 0 -14px; padding: 0 14px 6px; }
+  body.phone #grab { display: block; height: 24px; touch-action: none; cursor: grab; }
+  body.phone #grab::before { content: ""; display: block; width: 44px; height: 5px; border-radius: 3px;
+    background: var(--muted); opacity: .5; margin: 9px auto 0; }
+  body.phone #toggle { display: none; }
+  body.phone h1 { font-size: 16px; }
+  body.phone #species { font-size: 16px; padding: 8px; margin: 4px 0; }   /* 16px: iOS doesn't zoom on focus */
+  body.phone #peek { display: block; font-size: 13px; min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.phone .sub, body.phone #info, body.phone #here, body.phone #top, body.phone .card, body.phone .akey { font-size: 13px; }
+  body.phone label { padding: 5px 0; }
+  body.phone input[type=checkbox], body.phone input[type=radio] { width: 20px; height: 20px; }
+  body.phone .row { grid-template-columns: 112px 1fr 40px; margin: 6px 0; }
+  body.phone input[type=range] { height: 30px; }
+  body.phone #top li, body.phone .near li { padding: 9px 0; }
+  body.phone .leaflet-control-zoom { display: none; }            /* pinch to zoom */
+  body.phone .locate { width: 46px; height: 46px; line-height: 46px; font-size: 28px; }
+  body.phone .leaflet-bottom { bottom: calc(144px + env(safe-area-inset-bottom)); }   /* attribution above the drawer */
+  body.phone .leaflet-top { top: env(safe-area-inset-top); }
+  body.phone #about .box { width: 100vw; height: 100vh; height: 100dvh; max-height: none; border-radius: 0;
+    padding: calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom)); }
+  body.phone #aboutClose { top: calc(8px + env(safe-area-inset-top)); font-size: 30px; }
+  @media (max-width: 760px) {
+    #app { flex-direction: column-reverse; }
+    #panel { width: 100%; height: 45%; border-right: 0; border-top: 1px solid var(--line); }
+    #panel.collapsed { height: 44px; overflow: hidden; }
+    #toggle { display: inline-block; float: right; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div id="sheetHead">
+      <div id="grab" title="Tap or swipe to resize"></div>
+      <button id="toggle" type="button">Panel</button>
+      <h1>Mushroom habitat <button id="aboutBtn" class="aboutbtn" type="button" title="Disclaimer and sources">ⓘ</button>
+        <button id="uiBtn" class="aboutbtn uibtn" type="button"></button></h1>
+      <select id="species" aria-label="Species"></select>
+      <div id="peek" class="muted"></div>
+    </div>
+    <pre id="debugLog" hidden></pre>
+    <div id="detail" hidden></div>
+    <div class="card" id="card"></div>
+    <div class="sub"><span id="status">Loading…</span></div>
+
+    <h2 id="hereH" hidden>My location</h2>
+    <div id="here" hidden></div>
+
+    <h2>Area layer</h2>
+    <div class="views" id="views"></div>
+    <div class="row"><span>Min score</span><input id="thr" type="range" min="0" max="0.95" step="0.05" value="0.3"><output id="thrv"></output></div>
+    <div class="row"><span>Opacity</span><input id="opa" type="range" min="0.1" max="1" step="0.05" value="0.75"><output id="opav"></output></div>
+    <div class="legend" id="legend"></div>
+    <div class="ticks"><span>0</span><span>0.5</span><span>1</span></div>
+
+    <h2>Score weights</h2>
+    <div id="liveBox" hidden><button id="liveBtn" type="button" class="bigbtn">Adjust weights</button>
+      <div class="sub">Loads the factor layers (about 6 MB more) so the weights and the single-factor views work live.</div></div>
+    <div id="weights"></div>
+    <div class="sub">Score = host × weighted geometric mean of these, so one poor factor weighs heavily. Defaults come from config.yaml.</div>
+
+    <h2>Trees</h2>
+    <label><input id="showTrees" type="checkbox" checked> Show tree hotspots</label>
+    <div class="row"><span>Min tree score</span><input id="tthr" type="range" min="0" max="0.95" step="0.05" value="0.5"><output id="tthrv"></output></div>
+    <div class="chips" id="genera"></div>
+    <label style="margin-top:6px"><input id="showPrivate" type="checkbox" checked> Include private ground (gardens)</label>
+    <label><input id="onlyRec" type="checkbox"> Only trees where this fungus was recorded</label>
+    <div class="sub">Monumental trees plus the street and park trees of <span id="nMuni">–</span> municipalities' registers.
+      <span class="recring"></span> green ring: the municipality's tree inspectors recorded this fungus on the tree
+      (always shown). <span id="treeNote"></span></div>
+
+    <h2>Finds (iNaturalist)</h2>
+    <label><input id="showFinds" type="checkbox" checked> Show iNaturalist finds of this species</label>
+    <div class="sub"><span class="findkey"></span> <span id="nFinds">–</span> research-grade observations with a location
+      accurate to <span id="findsUnc">–</span> m or better (fetched <span id="findsDate">–</span>). Click one for the
+      date, observer and the observation itself. Information only: finds don't change any score, and where people
+      look shapes where finds are.</div>
+
+    <h2>Picking rules</h2>
+    <label><input id="showAccess" type="checkbox"> Show picking rules (outlines)</label>
+    <div class="akey" id="accessKey"></div>
+    <div class="sub">No outline: owner unknown, so the rule is unclear (very large multi-owner areas aren't outlined
+      either; click to see them). Boundaries are approximate and rules change; signs on site take precedence.
+      Policies checked <span id="accessChecked">–</span>.</div>
+    <label style="margin-top:8px"><input id="showBylaws" type="checkbox"> Show municipalities with a picking bylaw</label>
+    <div class="akey" id="bylawKey"></div>
+    <div class="sub">A municipal bylaw binds everyone, whoever owns the land: a ban overrides an owner's tolerance.
+      Click a place for the bylaw text. Bylaws scanned <span id="bylawsSearched">–</span>.</div>
+
+    <h2>Clicked location</h2>
+    <div id="info" class="muted">Click the map to see the factor values.</div>
+
+    <h2>Best trees in view</h2>
+    <ul id="top"></ul>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<div id="about" hidden role="dialog" aria-modal="true" aria-label="Disclaimer and sources">
+  <div class="box">
+    <button id="aboutClose" type="button" aria-label="Close">×</button>
+    <h1>About this map</h1>
+    <p>A non-commercial hobby project: an estimate of where seven edible mushrooms may grow in the Netherlands, built
+      from open data. It says <b>where</b>, never <b>when</b>, and it is not a field guide.</p>
+
+    <h2>Disclaimer</h2>
+    <ul>
+      <li><b>Not validated.</b> All scores are educated guesses from the ecology of each species. A first check against
+        precise observations supported some species and not others (for porcini it found no skill). Use the map as a
+        search aid, nothing more.</li>
+      <li><b>Identification is your responsibility.</b> Never eat a mushroom you have not identified with certainty,
+        with a recent field guide or an expert; apps are not reliable. Some edible species have poisonous lookalikes.
+        Do not eat chicken of the woods growing on yew. The author accepts no liability for any consequence of using
+        this map.</li>
+      <li><b>Picking rules are information, not legal advice.</b> There is no general right to forage in the
+        Netherlands: mushrooms belong to the landowner, and owners and municipal bylaws set the rules. The rules shown
+        are incomplete, may be out of date, and boundaries are approximate. Signs on site always take precedence.</li>
+      <li><b>Private ground.</b> Many trees shown stand in gardens, on estates or on other private land. Being on this
+        map gives no right of access: ask the owner.</li>
+      <li><b>Tree data</b> comes from public registers and may be outdated (trees felled, notes without a date). A
+        fungus recorded by tree inspectors is a past note, not a current find.</li>
+      <li><b>Finds</b> are other people's observations; they show where people looked, not where a species is absent.</li>
+      <li>Please pick little, for your own use, and leave the place as you found it.</li>
+    </ul>
+
+    <h2>Sources and licences</h2>
+    <ul>
+      <li>Monumental trees: Landelijk Register Monumentale Bomen, Bomenstichting / Rijksdienst voor het Cultureel
+        Erfgoed (CC BY 4.0).</li>
+      <li>Municipal tree registers (CC0, CC BY 4.0 or public domain, per municipality): gemeenten Amsterdam, Rotterdam,
+        Utrecht, Eindhoven, Groningen, Breda, Assen, Oss, Nijmegen, Súdwest-Fryslân, Arnhem, Delft, Hilversum and
+        Velsen.</li>
+      <li>Forest and land use: BRT Top10NL, Kadaster (CC BY 4.0). Municipal boundaries: Kadaster, PDOK (CC BY 4.0).</li>
+      <li>Soil: BRO Bodemkaart 1:50.000 (CC0).</li>
+      <li>Nitrogen deposition: RIVM, GCN/GDN deposition maps.</li>
+      <li>Canopy height: Meta and World Resources Institute, high-resolution canopy height maps (CC BY 4.0).</li>
+      <li>Forest history: Historisch Grondgebruik Nederland 1900–1990, Wageningen Environmental Research (CC BY 4.0).</li>
+      <li>Picking-rule areas: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>.
+        The derived areas file (<code>data/access.geojson</code>) is available under the
+        <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">Open Database License (ODbL)</a>.
+        Owner policies: the owners' own websites (linked in each rule).</li>
+      <li>Municipal bylaws: lokaleregelgeving.overheid.nl (CVDR); summaries are the author's, linked to the original text.</li>
+      <li>Finds: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> research-grade
+        observations via <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a>; each find shows its
+        observer and licence (mostly CC BY-NC 4.0, some CC BY 4.0 and CC0).</li>
+      <li>Background maps: PDOK BRT-Achtergrondkaart and Luchtfoto (Kadaster, Beeldmateriaal Nederland);
+        © OpenStreetMap contributors (tiles).</li>
+      <li>Map library: <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> (BSD 2-Clause).</li>
+    </ul>
+    <p class="muted">Picking policies checked <span id="aboutAccess">–</span> · bylaws scanned <span id="aboutBylaws">–</span>
+      · finds fetched <span id="aboutFinds">–</span>.</p>
+  </div>
+</div>
+
+<script>
+const VIEWS = { score: "Combined score", host: "Host trees", forest_age: "Forest age (canopy)",
+  continuity: "Old forest (since 1900)", soil: "Soil", nitrogen: "Nitrogen fit", edge: "Forest edge" };
+// English genus names for the tree filter; a genus missing here is shown by its Latin name (not hidden)
+const GENUS_NL = { Quercus: "Oak", Fagus: "Beech", Castanea: "Sweet chestnut", Betula: "Birch",
+  Pinus: "Pine", Picea: "Spruce", Carpinus: "Hornbeam", Tilia: "Lime", Larix: "Larch", Pseudotsuga: "Douglas fir",
+  Abies: "Fir", Cedrus: "Cedar", Salix: "Willow", Robinia: "Robinia", Prunus: "Cherry", Populus: "Poplar",
+  Pyrus: "Pear", Malus: "Apple", Sambucus: "Elder" };
+const genusName = g => GENUS_NL[g] || g;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------------------------------------------------------------- phone or desktop view
+// Order: ?ui=phone|desktop in the address (not remembered), else the user's remembered choice, else automatic:
+// a touch screen whose short side is at most 600 CSS px is a phone (tablets get the desktop view).
+const UI_KEY = "mushroom-map-ui";
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode: not remembered */ } } };
+const autoUI = () => matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) <= 600 ? "phone" : "desktop";
+const UI = (q => q === "phone" || q === "desktop" ? q : null)(new URLSearchParams(location.search).get("ui"))
+  || (s => s === "phone" || s === "desktop" ? s : null)(store.get(UI_KEY)) || autoUI();
+const PHONE = UI === "phone";
+let live = !PHONE;   // live = factor layers loaded, sliders work. The phone starts light (ready-made score image).
+document.body.classList.toggle("phone", PHONE);
+$("uiBtn").textContent = PHONE ? "desktop view" : "phone view";
+$("uiBtn").title = PHONE ? "Switch to the full desktop layout (remembered on this device)" : "Switch to the phone layout (remembered on this device)";
+$("uiBtn").onclick = () => {
+  store.set(UI_KEY, PHONE ? "desktop" : "phone");
+  // drop any ?ui=… so the remembered choice applies; without one, only a reload works (same address = no navigation)
+  if (location.search) location.replace(location.pathname + location.hash); else location.reload();
+};
+
+// Bottom drawer (phone): peek / half / full. Tap the grab bar to open or close, swipe it up or down to resize.
+const SHEETS = ["peek", "half", "full"];
+let sheet = "peek";
+function setSheet(s) { sheet = s; document.body.dataset.sheet = s; }
+if (PHONE) {
+  setSheet("peek");
+  let y0 = null;
+  const grab = $("grab");
+  grab.addEventListener("pointerdown", e => { y0 = e.clientY; grab.setPointerCapture(e.pointerId); });
+  grab.addEventListener("pointerup", e => {
+    if (y0 === null) return;
+    const dy = e.clientY - y0, k = SHEETS.indexOf(sheet);
+    y0 = null;
+    if (Math.abs(dy) < 10) setSheet(sheet === "peek" ? "half" : "peek");
+    else setSheet(SHEETS[Math.max(0, Math.min(2, k + (dy < 0 ? 1 : -1)))]);
+  });
+  $("peek").onclick = () => { if (sheet === "peek") setSheet("half"); };
+}
+const PEEK_HINT = "Tap the map, a tree or a ◆ find for details · ◎ shows where you are";
+const setPeek = html => { if (PHONE) $("peek").innerHTML = html || PEEK_HINT; };
+setPeek("");
+
+// Diagnostics for real devices (a phone has no developer console): add ?debug=1 to the address and a log of the
+// steps, timings and errors appears at the top of the panel/drawer; it can be screenshotted. Always kept in _log.
+const DEBUG = new URLSearchParams(location.search).has("debug");
+const T0 = performance.now(), _log = [];
+function log(msg) {
+  const line = `${((performance.now() - T0) / 1000).toFixed(1)}s ${msg}`;
+  _log.push(line);
+  if (DEBUG) { const el = $("debugLog"); el.hidden = false; el.textContent = _log.slice(-40).join("\n"); }
+}
+log(`${UI} view · ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 90)} · screen ${screen.width}×${screen.height} @${devicePixelRatio}x · window ${innerWidth}×${innerHeight}`);
+
+// Problems are shown on the page: status line and, on the phone, the drawer
+function showError(msg) {
+  log("PROBLEM " + msg);
+  console.error(msg);
+  $("status").textContent = "Problem: " + msg;
+  setPeek(`<span style="color:#c62828">Problem: ${esc(msg)}</span>`);
+}
+if (PHONE) {
+  addEventListener("error", e => showError(e.message || "script error"));
+  addEventListener("unhandledrejection", e => showError(String(e.reason?.message || e.reason)));
+}
+
+// Details of a tree, find or place: a popup on desktop, the top of the drawer on the phone
+let detailLayer = null;
+function openDetail(html, extra) {
+  closeDetail();
+  if (extra) detailLayer = extra.addTo(map);
+  $("detail").innerHTML = `<button class="dclose" type="button" aria-label="Close">×</button>${html}`;
+  $("detail").hidden = false;
+  $("detail").querySelector(".dclose").onclick = closeDetail;
+  if (sheet === "peek") setSheet("half");
+  $("panel").scrollTop = 0;
+}
+function closeDetail() {
+  $("detail").hidden = true;
+  if (detailLayer) { map.removeLayer(detailLayer); detailLayer = null; }
+}
+
+// Picking-rule classes (config.yaml `access:`), most restrictive first
+const ACCESS = {
+  forbidden: { label: "Forbidden", color: "#c62828", dash: null, help: "Owner bans picking, or the area is closed" },
+  private: { label: "Private", color: "#7b1fa2", dash: null, help: "Ask the owner's permission" },
+  unclear: { label: "Unclear", color: "#616161", dash: "5 4", help: "Owner or policy unknown: check the signs" },
+  tolerated: { label: "Tolerated within limits", color: "#2e7d32", dash: null, help: "Small amount for your own use, on paths" },
+};
+
+// Color ramp: pale straw -> amber -> brick -> deep brown
+const STOPS = [[0, [255, 244, 196]], [0.35, [247, 190, 92]], [0.65, [210, 105, 50]], [1, [96, 30, 22]]];
+function rampColor(t) {
+  for (let i = 1; i < STOPS.length; i++) {
+    const [t1, c1] = STOPS[i], [t0, c0] = STOPS[i - 1];
+    if (t <= t1) { const f = (t - t0) / (t1 - t0); return c0.map((v, k) => Math.round(v + f * (c1[k] - v))); }
+  }
+  return STOPS.at(-1)[1];
+}
+const LUT = Array.from({ length: 251 }, (_, i) => rampColor(i / 250));
+const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+$("legend").style.background = `linear-gradient(90deg, ${[0, .25, .5, .75, 1].map(t => css(rampColor(t))).join(",")})`;
+
+// ---------------------------------------------------------------- map
+// Map position and species live in the URL (#lat,lng,zoom[,species]) so views can be bookmarked
+const hp = location.hash.slice(1).split(","), h0 = hp.slice(0, 3).map(Number), hashSpecies = hp[3];
+const posOk = h0.length === 3 && h0.every(isFinite);
+const map = L.map("map", { zoomControl: true, preferCanvas: true })
+  .setView(posOk ? [h0[0], h0[1]] : [52.15, 5.6], posOk ? h0[2] : 8);
+let sp = null, SP = null;   // current species key and its manifest entry
+function writeHash() {
+  const c = map.getCenter();
+  history.replaceState(null, "", `#${c.lat.toFixed(5)},${c.lng.toFixed(5)},${map.getZoom()}${sp ? "," + sp : ""}`);
+}
+map.on("moveend", writeHash);
+const pdokAttr = 'Kaartgegevens &copy; <a href="https://www.kadaster.nl">Kadaster</a>';
+const bases = {
+  "Map (grey)": L.tileLayer("https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png", { maxZoom: 19, attribution: pdokAttr }),
+  "Aerial photo": L.tileLayer("https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg", { maxZoom: 19, attribution: pdokAttr }),
+  "OpenStreetMap": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }),
+};
+bases["Map (grey)"].addTo(map);
+L.control.layers(bases, null, { position: "topright" }).addTo(map);
+map.createPane("access").style.zIndex = 430;   // between the habitat overlay (400) and the trees (450)
+map.createPane("trees").style.zIndex = 450;
+const accessRenderer = L.canvas({ pane: "access", padding: 0.3 });
+// Phone: dots keep their size but react to taps up to 8 px outside them (fingers are less precise than a mouse)
+const treeRenderer = L.canvas({ pane: "trees", padding: 0.3, tolerance: PHONE ? 8 : 0 });
+
+// ---------------------------------------------------------------- GPS tracking
+// One button, three states: off -> tracking + following -> (drag the map) tracking only -> tap: follow again.
+// Tapping while following stops tracking. Needs a secure context: https, or localhost on the same device.
+const track = { on: false, follow: false, first: true, last: null, marker: null, circle: null, lastPanel: 0, pending: null };
+const Locate = L.Control.extend({
+  onAdd() {
+    const b = L.DomUtil.create("a", "leaflet-bar leaflet-control locate");
+    b.id = "locateBtn"; b.href = "#"; b.innerHTML = "◎";
+    L.DomEvent.on(b, "click", e => { L.DomEvent.stop(e); toggleTracking(); });
+    return b;
+  },
+});
+new Locate({ position: "topleft" }).addTo(map);
+
+function setLocateLook() {
+  const b = $("locateBtn");
+  b.className = "leaflet-bar leaflet-control locate" + (track.on ? (track.follow ? " follow" : " on") : "");
+  b.title = !track.on ? "Track my location" : track.follow ? "Following you (tap to stop)" : "Tracking (tap to follow again)";
+}
+
+function toggleTracking() {
+  if (!track.on) {
+    if (!navigator.geolocation) { showHere('<span class="muted">This browser has no location support.</span>'); return; }
+    Object.assign(track, { on: true, follow: true, first: true });
+    map.locate({ watch: true, enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+    keepAwake(true);
+    showHere('<span class="muted">Waiting for your location…</span>');
+  } else if (!track.follow) {
+    track.follow = true;
+    if (track.last) map.setView(track.last.latlng, Math.max(map.getZoom(), 15));
+  } else {
+    stopTracking();
+  }
+  setLocateLook();
+}
+
+function stopTracking(message) {
+  Object.assign(track, { on: false, follow: false, last: null });
+  map.stopLocate();
+  keepAwake(false);
+  setPeek("");
+  if (track.marker) { map.removeLayer(track.marker); map.removeLayer(track.circle); track.marker = track.circle = null; }
+  message ? showHere(message) : ($("hereH").hidden = $("here").hidden = true);
+  setLocateLook();
+}
+
+map.on("locationfound", e => {
+  if (!track.on) return;
+  track.last = e;
+  const heading = Number.isFinite(e.heading) && e.speed > 0.5 ? e.heading : null;   // GPS heading only while moving
+  const html = `<div class="me">${heading === null ? "" : `<div class="me-arrow" style="transform:rotate(${heading}deg)"></div>`}<div class="me-dot"></div></div>`;
+  if (!track.marker) {
+    track.circle = L.circle(e.latlng, { radius: e.accuracy, color: "#1565c0", weight: 1, fillOpacity: 0.08, interactive: false }).addTo(map);
+    track.marker = L.marker(e.latlng, { icon: L.divIcon({ className: "", html, iconSize: [36, 36], iconAnchor: [18, 18] }),
+      interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+  } else {
+    track.circle.setLatLng(e.latlng).setRadius(e.accuracy).setStyle({ color: "#1565c0" });
+    $("gpsNote")?.remove();
+    track.marker.setLatLng(e.latlng).setIcon(L.divIcon({ className: "", html, iconSize: [36, 36], iconAnchor: [18, 18] }));
+  }
+  if (track.follow) {
+    if (track.first) map.setView(e.latlng, Math.max(map.getZoom(), 15));
+    else map.panTo(e.latlng);
+  }
+  track.first = false;
+  // Refresh the panel at most every 1.5 s, but never drop the latest fix (a phone standing still may not send more)
+  const wait = 1500 - (Date.now() - track.lastPanel);
+  if (wait <= 0) { track.lastPanel = Date.now(); updateHere(); }
+  else if (!track.pending) track.pending = setTimeout(() => { track.pending = null; track.lastPanel = Date.now(); updateHere(); }, wait);
+});
+
+map.on("locationerror", e => {
+  if (!track.on) return;
+  if (e.code === 1) {   // permission denied: nothing will come, stop
+    stopTracking(`<span class="muted">Location permission denied. Allow it in the browser settings${
+      location.protocol !== "https:" && location.hostname !== "localhost" ? " (location only works over https or on localhost)" : ""}.</span>`);
+    return;
+  }
+  // Signal lost or timeout (common under dense trees): keep watching, show a note above the last known info
+  const note = `<div class="muted" id="gpsNote">GPS signal lost, still trying… (${esc(e.message)})</div>`;
+  if (!$("gpsNote")) $("here").insertAdjacentHTML("afterbegin", note);
+  if (track.circle) track.circle.setStyle({ color: "#999" });
+});
+
+// Phone: keep the screen on while tracking (Wake Lock API; silently ignored where unsupported). The browser drops
+// the lock when the page is hidden, so it is taken again when the page comes back.
+let wakeLock = null;
+async function keepAwake(on) {
+  if (!PHONE) return;
+  try {
+    if (on && !wakeLock && "wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && track.on) keepAwake(true); });
+
+// Dragging the map yourself stops following (tracking continues)
+map.on("dragstart", () => { if (track.follow) { track.follow = false; setLocateLook(); } });
+
+function showHere(html) { $("hereH").hidden = $("here").hidden = false; $("here").innerHTML = html; }
+
+const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+function bearing(a, b) {
+  const r = Math.PI / 180, y = Math.sin((b.lng - a.lng) * r) * Math.cos(b.lat * r);
+  const x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos((b.lng - a.lng) * r);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+
+function updateHere() {
+  const e = track.last;
+  if (!e) return;
+  const ll = e.latlng, v = valueAt(ll);
+  const inData = v && v.score !== 255;
+  const rule = pickingAt(ll, inData && isForest(v));
+  const nf = nearestFind(ll);
+  setPeek(`<b>Here:</b> ${inData ? fmt(v.score) : "no data"} · <span class="rule" style="background:${(ACCESS[rule.cls] || ACCESS.unclear).color}">${(ACCESS[rule.cls] || ACCESS.unclear).label}</span>`
+    + (nf ? ` · find ${fmtDist(nf.d)} ${COMPASS[Math.round(bearing(ll, L.latLng(nf.r[0], nf.r[1])) / 45) % 8]}` : ""));
+  const near = [];
+  treeLayer.eachLayer(m => near.push({ m, d: map.distance(ll, m.getLatLng()) }));   // respects the tree filters
+  near.sort((a, b) => a.d - b.d);
+  const list = near.slice(0, 5).map(({ m, d }, k) => {
+    const a = ACCESS[m.p.access] || ACCESS.unclear;
+    return `<li data-k="${k}"><span><span class="dot" style="background:${a.color}" title="Picking: ${a.label}"></span>${esc(treeTitle(m.p))}
+      <span class="muted">${m.s.toFixed(2)}${m.rec ? " ★" : ""}</span></span><span>${fmtDist(d)} ${COMPASS[Math.round(bearing(ll, m.getLatLng()) / 45) % 8]}</span></li>`;
+  }).join("");
+  showHere(`<div class="muted">±${Math.round(e.accuracy)} m · ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}${e.speed > 0.5 ? ` · ${(e.speed * 3.6).toFixed(1)} km/h` : ""}</div>
+    <div style="margin:4px 0"><b>Habitat score here</b> (${esc(SP.label)}): ${inData ? fmt(v.score) : '<span class="muted">no data (built-up area or water)</span>'}</div>
+    <div><b>Picking rule here</b><br>${pickingHtml(rule)}</div>
+    <div style="margin-top:6px"><b>Nearest trees</b> <span class="muted">(with the current tree filters)</span></div>
+    <ul id="nearList" class="near">${list || '<li class="muted">No trees shown nearby.</li>'}</ul>
+    ${(f => f ? `<div style="margin-top:6px"><b>Nearest iNaturalist find</b>: ${fmtDist(f.d)} ${COMPASS[Math.round(bearing(ll, L.latLng(f.r[0], f.r[1])) / 45) % 8]}
+      <span class="muted">(${esc(f.r[2])})</span></div>` : "")(nf)}`);
+  document.querySelectorAll("#nearList li[data-k]").forEach(li => li.onclick = () => {
+    const m = near[+li.dataset.k].m;
+    track.follow = false; setLocateLook();
+    map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); showTree(m);
+  });
+}
+
+// ---------------------------------------------------------------- state
+let M, W, H, N, layers = {}, score, trees = [], treeLayer = L.layerGroup().addTo(map);
+let view = "score", weights = {};
+let cur = {};                   // factor name -> Uint8Array (×250) for the current species
+const nitroCache = {};          // species -> its nitrogen factor array
+let TC = null;                  // trees.json columns
+let finds = null, findLayer = L.layerGroup().addTo(map), findCircle = null;   // records.json (iNaturalist)
+let accessFeatures = [], accessLayer = null, bylawFeatures = [], bylawLayer = null;
+
+async function get(path, as, tries = 3) {
+  for (let k = 1; ; k++) {
+    try {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+      return await r[as]();
+    } catch (err) {
+      if (k >= tries) throw new Error(`${path}: ${err.message}`);
+      await new Promise(res => setTimeout(res, 300 * k));
+    }
+  }
+}
+
+// Layers are read and drawn in strips of STRIP rows: iOS Safari caps canvas size and memory per page (depending on
+// the device) and silently returns blank pixels beyond that, which left the area layer empty on iPhones.
+const STRIP = 512;
+const makeCanvas = (w, h) => typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h)
+  : Object.assign(document.createElement("canvas"), { width: w, height: h });
+async function decodeBitmap(blob) {
+  try { return await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" }); }
+  catch { return await createImageBitmap(blob); }   // browsers that reject these options
+}
+// Layers are read from <name>.u8z: the raw bytes (row by row, W × H), gzip-compressed, unpacked by the browser
+// (DecompressionStream: iOS 16.4+, all current browsers). Not from the PNG: Safari (iPhone and Mac) colour-manages
+// grey PNGs while decoding and shifts the values (e.g. 250 became 251-254, which also broke the colour lookup).
+// The PNG route remains as a fallback for browsers without DecompressionStream.
+async function loadGray(name) {
+  if (typeof DecompressionStream === "undefined") return loadGrayPng(name);
+  let bytes = new Uint8Array(await get(`data/${name}.u8z`, "arrayBuffer"));
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b)   // gzip magic; a server may already have unpacked it
+    bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+  if (bytes.length !== N) throw new Error(`${name}.u8z has ${bytes.length} values, expected ${N}`);
+  return bytes;
+}
+async function loadGrayPng(name) {
+  const blob = await get(`data/${name}.png`, "blob");
+  const bmp = await decodeBitmap(blob);
+  const c = makeCanvas(W, STRIP), ctx = c.getContext("2d", { willReadFrequently: true }), out = new Uint8Array(N);
+  for (let r0 = 0; r0 < H; r0 += STRIP) {
+    const h = Math.min(STRIP, H - r0);
+    ctx.clearRect(0, 0, W, STRIP);
+    ctx.drawImage(bmp, 0, r0, W, h, 0, 0, W, h);
+    const rgba = ctx.getImageData(0, 0, W, h).data;
+    for (let i = 0, o = r0 * W, n = W * h; i < n; i++) out[o + i] = rgba[i * 4];
+  }
+  bmp.close?.(); c.width = c.height = 0;   // hand the memory back at once (Safari keeps canvas memory otherwise)
+  return out;
+}
+// True if a layer has any real value (a blank decode gives only 0)
+const hasValues = a => { for (let i = 0; i < a.length; i += 7) if (a[i] > 0 && a[i] < 255) return true; return false; };
+
+// Piecewise-linear curve through [[x, y], ...], flat outside (numpy.interp), as nitrogen_factor() in common.py
+function interp(x, bp) {
+  if (x <= bp[0][0]) return bp[0][1];
+  for (let k = 1; k < bp.length; k++) {
+    const [x0, y0] = bp[k - 1], [x1, y1] = bp[k];
+    if (x <= x1) return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  }
+  return bp.at(-1)[1];
+}
+// Nitrogen factor of a species from the raw deposition layer (mol/ha/yr ÷ nitrogen_step), through a 251-entry LUT
+function nitrogenFor(key) {
+  if (nitroCache[key]) return nitroCache[key];
+  const bp = M.species[key].nitrogen, raw = layers.nitrogen_raw, lut = new Uint8Array(256).fill(255);
+  for (let v = 0; v <= 250; v++) lut[v] = Math.round(interp(v * M.nitrogen_step, bp) * 250);
+  const out = new Uint8Array(N);
+  for (let i = 0; i < N; i++) out[i] = lut[raw[i]];
+  return nitroCache[key] = out;
+}
+
+// Switch species. Live mode: load its host/soil layers once and recompute from the factors (desktop, or the phone
+// after "Adjust weights"). Light mode (phone default): just load the species' ready-made score image.
+// A newer call wins: if the user switches again while layers are still loading (slow network), the older call
+// stops after its download instead of overwriting the map with the previous species.
+let selectToken = 0;
+async function selectSpecies(key) {
+  const token = ++selectToken, t0 = performance.now();
+  sp = M.species[key] ? key : M.default_species; SP = M.species[sp];
+  const mine = sp;
+  log(`species ${mine}: start (${live ? "live" : "light"})`);
+  $("species").value = sp;
+  $("status").textContent = "Loading…";
+  weights = { ...SP.weights };
+  if (live) {
+    const missing = [...M.shared, SP.host, SP.soil].filter(n => !layers[n]);
+    if (PHONE) {   // one at a time: each decode briefly needs ~80 MB, all at once would need several hundred
+      freeOtherSpecies();
+      for (const n of missing) layers[n] = await loadGray(n);
+    } else await Promise.all(missing.map(async n => { layers[n] = await loadGray(n); }));
+    if (token !== selectToken) { log(`species ${mine}: superseded`); return; }
+    cur = { host: layers[SP.host], soil: layers[SP.soil], nitrogen: nitrogenFor(sp),
+            forest_age: layers.forest_age, continuity: layers.continuity, edge: layers.edge };
+    computeScore();
+  } else {
+    const s = await loadGray(SP.score);
+    if (token !== selectToken) { log(`species ${mine}: superseded`); return; }
+    score = s;
+    cur = {};
+    view = "score";
+    if (!hasValues(score)) showError(`the area layer image came out blank on this device (${SP.score}.png)`);
+  }
+  log(`species ${mine}: layers ready in ${Math.round(performance.now() - t0)} ms`);
+  // Each step on its own: one failing step must not stop the others (finds first: cheap and independent)
+  for (const [name, step] of [["card", showCard], ["views", buildViews], ["weights", buildWeights], ["genera", buildGenera],
+                              ["hash", writeHash], ["finds", drawFinds], ["area layer", render], ["trees", drawTrees]]) {
+    try {
+      const r = step();
+      if (r && r.catch) r.catch(e => showError(`${name}: ${e.message || e}`));
+    } catch (e) { showError(`${name}: ${e.message || e}`); }
+  }
+  if (track.last) updateHere();
+  log(`species ${mine}: drawn (finds ${findLayer.getLayers().length}, trees ${treeLayer.getLayers().length})`);
+}
+
+// Phone, live mode: keep only the shared layers and the current species' layers in memory
+function freeOtherSpecies() {
+  const keep = new Set([...M.shared, SP.host, SP.soil]);
+  for (const n of Object.keys(layers)) if (!keep.has(n)) delete layers[n];
+  for (const k of Object.keys(nitroCache)) if (k !== sp) delete nitroCache[k];
+}
+
+// Phone: "Adjust weights" switches to live mode for the rest of the visit
+async function goLive() {
+  live = true;
+  $("liveBox").hidden = true;
+  if (score.length !== N) score = new Uint8Array(N);
+  await selectSpecies(sp);
+}
+
+function showCard() {
+  $("card").innerHTML = `<b>${esc(SP.label)}</b> · <i>${esc(SP.latin)}</i> · ${esc(SP.nl)}
+    <div><b>Season:</b> ${esc(SP.season)}</div><div><b>Where:</b> ${esc(SP.grows)}</div>
+    <div><b>Recognise:</b> ${esc(SP.id)}</div>${SP.proxy ? `<div class="warn">${esc(SP.proxy)}</div>` : ""}
+    <div class="muted">Only eat what you have identified with certainty (recent field guide or an expert; not an app).
+      Scores are educated guesses, not validated.</div>`;
+}
+
+// Weighted geometric mean with a per-factor floor, same as scripts/20_score.py
+let LOG;
+function computeScore() {
+  LOG ??= Float32Array.from({ length: 251 }, (_, v) => Math.log(Math.max(v / 250, M.factor_floor)));
+  const names = Object.keys(weights), host = cur.host;
+  const fs = names.map(n => cur[n]), ws = names.map(n => weights[n]);
+  for (let i = 0; i < N; i++) {
+    const h = host[i];
+    if (h === 255) { score[i] = 255; continue; }
+    if (h === 0) { score[i] = 0; continue; }
+    let num = 0, den = 0;
+    for (let k = 0; k < fs.length; k++) { const v = fs[k][i]; if (v <= 250 && ws[k] > 0) { num += LOG[v] * ws[k]; den += ws[k]; } }
+    score[i] = den ? Math.round(h * Math.exp(num / den)) : 0;
+  }
+}
+
+// The coloured layer is painted strip by strip and shown as one image overlay per strip: STRIP rows on the phone
+// (small images that iOS Safari accepts), a single strip covering everything on desktop (as before).
+const overlays = [], stripUrls = [];
+let renderToken = 0;
+function stripBounds(r0, h) {
+  if (r0 === 0 && h === H) return M.bounds_latlng;
+  const [x0, y0, x1, y1] = M.bounds_3857, yTop = y1 - r0 / H * (y1 - y0), yBot = y1 - (r0 + h) / H * (y1 - y0);
+  const sw = L.CRS.EPSG3857.unproject(L.point(x0, yBot)), ne = L.CRS.EPSG3857.unproject(L.point(x1, yTop));
+  return [[sw.lat, sw.lng], [ne.lat, ne.lng]];
+}
+async function render() {
+  const token = ++renderToken, rows = PHONE ? STRIP : H, forSp = sp, forView = view, t0 = performance.now();
+  const src = view === "score" ? score : cur[view];
+  const thr = view === "score" ? Math.round(+$("thr").value * 250) : 0;
+  const hideZero = view === "score" || view === "host";
+  const c = document.createElement("canvas");
+  c.width = W; c.height = rows;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(W, rows), px = img.data;
+  for (let s = 0, r0 = 0; r0 < H; s++, r0 += rows) {
+    const h = Math.min(rows, H - r0);
+    px.fill(0);
+    for (let i = 0, o = r0 * W, n = W * h; i < n; i++) {
+      const v = src[o + i];
+      if (v > 250 || v < thr || (hideZero && v === 0)) continue;   // > 250: no data (255) or an invalid value
+      const col = LUT[v], j = i * 4;
+      px[j] = col[0]; px[j + 1] = col[1]; px[j + 2] = col[2]; px[j + 3] = 255;
+    }
+    if (c.height !== h) c.height = h;   // the last strip is shorter (putImageData clips the rest)
+    ctx.putImageData(img, 0, 0);
+    const blob = await new Promise(res => c.toBlob(res));
+    if (token !== renderToken) return;   // a newer render has started
+    if (!blob) { showError("the browser could not draw the area layer"); return; }
+    const url = URL.createObjectURL(blob);
+    if (!overlays[s]) overlays[s] = L.imageOverlay(url, stripBounds(r0, h), { opacity: +$("opa").value, className: "pixelated" }).addTo(map);
+    else overlays[s].setUrl(url);
+    if (stripUrls[s]) setTimeout(URL.revokeObjectURL, 2000, stripUrls[s]);
+    stripUrls[s] = url;
+  }
+  c.width = c.height = 0;
+  $("status").textContent = "";
+  window._rendered = { sp: forSp, view: forView, strips: overlays.length };   // read by the test scripts
+  log(`area layer ${forSp}/${forView}: ${overlays.length} strip(s) in ${Math.round(performance.now() - t0)} ms`);
+}
+
+function valueAt(latlng) {
+  const p = L.CRS.EPSG3857.project(latlng), [x0, y0, x1, y1] = M.bounds_3857;
+  const col = Math.floor((p.x - x0) / (x1 - x0) * W), row = Math.floor((y1 - p.y) / (y1 - y0) * H);
+  if (col < 0 || row < 0 || col >= W || row >= H) return null;
+  const i = row * W + col, out = { score: score[i] };
+  if (live) for (const n of ["host", ...M.factors]) out[n] = cur[n][i];
+  return out;
+}
+const fmt = v => v === 255 || v === undefined ? "–" : (v / 250).toFixed(2);
+// Host trees in this cell? (light mode has no host layer, but score > 0 exactly where host > 0)
+const isForest = v => live ? v.host > 0 && v.host !== 255 : v.score > 0 && v.score !== 255;
+
+map.on("click", e => {
+  const v = valueAt(e.latlng);
+  if (!v) { $("info").innerHTML = '<span class="muted">Outside the map area.</span>'; return; }
+  // Built-up areas have no habitat data (the soil map leaves them out) but picking rules still apply there
+  const hasData = v.score !== 255;
+  const rule = pickingHtml(pickingAt(e.latlng, hasData && isForest(v)));
+  const rows = live ? Object.entries(VIEWS) : [["score", VIEWS.score]];
+  const html = (hasData ? "<table>" + rows.map(([k, label]) =>
+    `<tr><td>${k === "score" ? "<b>" + label + "</b>" : label}</td><td>${k === "score" ? "<b>" + fmt(v[k]) + "</b>" : fmt(v[k])}</td></tr>`).join("") + "</table>"
+    + (live ? "" : '<div class="muted">Factor values: tap "Adjust weights" further down.</div>')
+    : '<span class="muted">No habitat data here (built-up area or water).</span>') +
+    `<div style="margin-top:6px"><b>Picking rule</b><br>${rule}</div>`;
+  $("info").innerHTML = html;
+  if (PHONE) {
+    setPeek(`<b>Tapped:</b> ${hasData ? fmt(v.score) : "no data"} · ${(ACCESS[pickingAt(e.latlng, hasData && isForest(v)).cls] || ACCESS.unclear).label}`);
+    openDetail(`<div class="pop"><h3>Tapped location (${esc(SP.label)})</h3>${html}</div>`,
+               L.circleMarker(e.latlng, { radius: 7, color: "#1565c0", weight: 2, fill: false, interactive: false }));
+  } else if ($("showAccess").checked || $("showBylaws").checked)
+    L.popup({ maxWidth: 340 }).setLatLng(e.latlng).setContent(`<div class="pop">${rule}</div>`).openOn(map);
+});
+
+// ---------------------------------------------------------------- picking rules
+// Features are in draw order (most specific last), so the lookup walks backwards.
+function bboxOf(g) {
+  const b = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const poly of g.type === "Polygon" ? [g.coordinates] : g.coordinates)
+    for (const [x, y] of poly[0]) { b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y); }
+  return b;
+}
+function inRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const inPoly = (x, y, poly) => inRing(x, y, poly[0]) && !poly.slice(1).some(h => inRing(x, y, h));
+const inGeom = (x, y, g) => g.type === "Polygon" ? inPoly(x, y, g.coordinates) : g.coordinates.some(p => inPoly(x, y, p));
+
+function featureAt(features, ll) {
+  for (let i = features.length - 1; i >= 0; i--) {
+    const f = features[i], b = f.bbox;
+    if (ll.lng < b[0] || ll.lng > b[2] || ll.lat < b[1] || ll.lat > b[3]) continue;
+    if (inGeom(ll.lng, ll.lat, f.geometry)) return f;
+  }
+  return null;
+}
+const ruleAt = ll => featureAt(accessFeatures, ll)?.properties ?? { cls: M.access_unknown.cls, note: M.access_unknown.note };
+
+// Municipal bylaws (bylaws.yaml via step 11). Same scope logic as bylaw_applies() in 12_build_access.py.
+const LAW = {
+  forbidden: { color: ACCESS.forbidden.color, here: "Bylaw ban applies here", elsewhere: "Bylaw ban (elsewhere in this municipality)" },
+  unclear: { color: ACCESS.unclear.color, here: "Ban only at designated places/species (not found)" },
+  none: { color: ACCESS.tolerated.color, here: "No bylaw ban on small amounts" },
+};
+function lawApplies(e, ctx) {
+  return e.scopes.some(s => s === "municipality" || (s === "forest" && ctx.forest)
+    || (s === "owners" && e.owners.some(o => ctx.owner.includes(o)))
+    || (s === "named_areas" && e.areas.some(a => ctx.name.includes(a)))
+    || ((s === "municipal_land" || s === "public_green") && ctx.owner.includes("gemeente"))
+    || (s === "public_green" && ctx.kind === "park"));
+}
+function pickingAt(ll, forestHere) {
+  const area = ruleAt(ll), muni = featureAt(bylawFeatures, ll)?.properties;
+  const ctx = { forest: forestHere, name: (area.name || "").toLowerCase(), owner: (area.owner || "").toLowerCase(), kind: area.kind || "" };
+  const laws = muni ? muni.parsed.map(e => ({ ...e, applies: lawApplies(e, ctx) })) : [];
+  const base = area.owner_cls || area.cls;
+  const cls = laws.some(l => l.class === "forbidden" && l.applies) ? "forbidden" : base;
+  return { cls, area: { ...area, cls: base }, municipality: muni?.municipality, laws };
+}
+
+function areaHtml(r) {
+  const a = ACCESS[r.cls] || ACCESS.unclear;
+  const who = [r.name, r.owner && r.owner !== r.name ? r.owner : ""].filter(Boolean).map(esc).join(" · ");
+  const src = r.confidence && r.confidence !== "none"
+    ? ` <span class="muted">(${esc(r.confidence)}${r.source ? `, <a href="${esc(r.source)}" target="_blank" rel="noopener">source</a>` : ""})</span>` : "";
+  return `<div><span class="rule" style="background:${a.color}">${a.label}</span> ${who}<div class="muted">${esc(r.note)}${src}</div></div>`;
+}
+function lawHtml(l) {
+  const t = LAW[l.class] || LAW.unclear, label = l.class === "forbidden" && !l.applies ? t.elsewhere : t.here;
+  const links = (l.urls || []).map((u, k) => `<a href="${esc(u)}" target="_blank" rel="noopener">text${l.urls.length > 1 ? " " + (k + 1) : ""}</a>`).join(", ");
+  return `<div><span class="rule" style="background:${t.color}">${label}</span> ${esc(l.rule)}
+    <div class="muted">${esc(l.article)}${l.exceptions ? ". Exceptions: " + esc(l.exceptions) : ""} ${links}</div></div>`;
+}
+function pickingHtml(p) {
+  const a = ACCESS[p.cls] || ACCESS.unclear;
+  let h = `<span class="rule" style="background:${a.color};font-size:12px">${a.label}</span>`;
+  h += `<div class="rl"><b>Owner / area</b>${areaHtml(p.area)}</div>`;
+  if (p.municipality) h += `<div class="rl"><b>Municipal bylaw (${esc(p.municipality)})</b>${p.laws.map(lawHtml).join("")}</div>`;
+  return h;
+}
+
+function toggleAccess() {
+  if (!$("showAccess").checked) { if (accessLayer) map.removeLayer(accessLayer); return; }
+  accessLayer ??= L.geoJSON({ type: "FeatureCollection", features: accessFeatures }, {
+    renderer: accessRenderer, interactive: false,
+    // Huge multi-owner "unclear" areas (coast, IJsselmeer, Natura 2000 containers) only add clutter;
+    // they still answer clicks through ruleAt()
+    filter: f => !(f.properties.cls === "unclear" && f.properties.area_km2 > 50),
+    style: f => {
+      const a = ACCESS[f.properties.cls] || ACCESS.unclear;
+      return { color: a.color, weight: f.properties.cls === "forbidden" ? 2.5 : 1.8, dashArray: a.dash, opacity: 0.9, fill: false };
+    },
+  });
+  accessLayer.addTo(map);
+}
+
+function toggleBylaws() {
+  if (!$("showBylaws").checked) { if (bylawLayer) map.removeLayer(bylawLayer); return; }
+  bylawLayer ??= L.geoJSON({ type: "FeatureCollection", features: bylawFeatures }, {
+    renderer: accessRenderer, interactive: false,
+    style: f => ({ color: (LAW[f.properties.cls] || LAW.unclear).color, weight: 2.2, dashArray: "10 4 2 4", opacity: 0.85, fill: false }),
+  });
+  bylawLayer.addTo(map);
+}
+
+// ---------------------------------------------------------------- trees
+// Tree files are column-wise: numbers as arrays, text as {dict, codes}. A tree {c, i} is row i of the columns c of
+// its file: trees.json (desktop), or on the phone trees/overview.json (zoomed out) and trees/<row>_<col>.json tiles.
+function col(cols, name, i) {
+  const c = cols[name];
+  return c && c.dict ? c.dict[c.codes[i]] : c ? c[i] : undefined;
+}
+function props(t) {
+  const p = {};
+  for (const name of Object.keys(t.c)) p[name] = col(t.c, name, t.i);
+  return p;
+}
+const makeTrees = (json, src) => Array.from({ length: json.n }, (_, i) => ({ c: json.cols, i, id: src + ":" + i,
+  ll: L.latLng(json.cols.lat[i], json.cols.lng[i]), g: col(json.cols, "geslacht", i), rec: col(json.cols, "rec", i) }));
+
+// Phone: tiles around the view (zoomed in), the overview otherwise. Up to MAX_TILES tiles stay in memory.
+const tiles = new Map(), MAX_TILES = 40;   // id -> {trees, used} | {loading: Promise}
+let overviewTrees = [];
+function tileIdsAround(b) {
+  const d = M.tree_tiles.deg, ids = [];
+  for (let r = Math.floor(b.getSouth() / d); r <= Math.floor(b.getNorth() / d); r++)
+    for (let c = Math.floor(b.getWest() / d); c <= Math.floor(b.getEast() / d); c++)
+      if (tileSet.has(`${r}_${c}`)) ids.push(`${r}_${c}`);
+  return ids;
+}
+let tileSet = new Set();
+function loadTiles(ids) {
+  const missing = ids.filter(id => !tiles.has(id));
+  if (!missing.length) return;
+  $("status").textContent = "Loading trees…";
+  Promise.all(missing.map(id => {
+    const loading = get(`data/trees/${id}.json`, "json").then(j => tiles.set(id, { trees: makeTrees(j, id), used: Date.now() }))
+      .catch(err => { tiles.delete(id); log(`tile ${id} failed: ${err.message}`); });
+    tiles.set(id, { loading });
+    return loading;
+  })).then(() => {
+    // forget the least recently used tiles that are not in view
+    const done = [...tiles].filter(([id, t]) => t.trees && !ids.includes(id)).sort((a, b) => a[1].used - b[1].used);
+    while (tiles.size > MAX_TILES && done.length) tiles.delete(done.shift()[0]);
+    $("status").textContent = "";
+    drawTrees();
+  });
+}
+function treesInScope(b) {
+  if (!PHONE) return trees;
+  if (map.getZoom() < M.tree_tiles.min_zoom) return overviewTrees;
+  const ids = tileIdsAround(b);
+  loadTiles(ids);
+  return ids.flatMap(id => { const t = tiles.get(id); if (t?.trees) { t.used = Date.now(); return t.trees; } return []; });
+}
+// Show a tree's details: popup on desktop, drawer on the phone
+function showTree(m) { PHONE ? openDetail(treePopup(m.p, m.s)) : m.openPopup(); }
+const isRec = (t, key) => t.rec !== "" && ("," + t.rec + ",").includes("," + key + ",");
+const treeTitle = p => p.name || genusName(p.geslacht);
+
+function treePopup(p, s) {
+  const pct = v => v == null ? "–" : (v / 100).toFixed(2);
+  const mon = p.src === "monumental";
+  const age = mon ? `Planted ${esc(p.plantjaar)} · ${esc(p.plantwijze)} · ${esc(p.omgeving)}`
+    : [p.plantjaar ? `Planted ${esc(p.plantjaar)}` : p.age_years != null ? `About ${p.age_years} years old (estimated)` : "Age unknown",
+       p.diam ? `trunk ${p.diam} cm` : "", `${esc(p.muni)} tree register`].filter(Boolean).join(" · ");
+  const rec = ("," + p.rec + ",").includes("," + sp + ",")
+    ? `<div class="rec"><b>${esc(SP.label)} recorded on this tree</b> by the municipality's tree inspectors: ${esc(p.fungi)}</div>` : "";
+  const ll = L.latLng(p.lat, p.lng), v = valueAt(ll);
+  const breakdown = sp === "porcini" ? `<tr><td>Soil</td><td>${pct(p.soil)}</td></tr><tr><td>Low nitrogen</td><td>${pct(p.nitrogen)}</td></tr>
+    <tr><td>Age</td><td>${pct(p.age_f)}</td></tr><tr><td>Setting</td><td>${pct(p.setting)}</td></tr>` : "";
+  return `<div class="pop"><h3>${esc(treeTitle(p))}</h3><i>${esc(p.latin)}</i><br>
+    ${p.private ? '<span class="tag">private ground</span><br>' : ""}${age}${rec}
+    <table style="margin-top:6px"><tr><td><b>Tree score (${esc(SP.label)})</b></td><td><b>${s.toFixed(2)}</b></td></tr>
+    ${breakdown}<tr><td>Area score (cell)</td><td>${v && v.score !== 255 ? fmt(v.score) : "–"}</td></tr></table>
+    <div style="margin:6px 0"><b>Picking rule</b><br>${pickingHtml(treePicking(p))}</div>
+    ${mon && p.boom_url ? `<a href="${esc(p.boom_url)}" target="_blank" rel="noopener">Register entry ↗</a>` : ""}</div>`;
+}
+
+// Picking rule at a tree is computed in Python (20_score.py); here it is only laid out.
+function treePicking(p) {
+  const muni = bylawFeatures.find(f => f.properties.municipality === p.gemeente)?.properties;
+  const laws = muni ? muni.parsed.map(e => ({ ...e, applies: !!p.law && p.law.startsWith(e.rule) })) : [];
+  return { cls: p.access, area: { cls: p.access_base, name: p.access_area, owner: p.access_owner, note: p.access_note },
+           municipality: muni?.municipality, laws };
+}
+
+// Small dots at country scale, bigger when zoomed in
+const treeRadius = s => (2 + 4 * s) * Math.min(1.3, Math.max(0.35, (map.getZoom() - 6) / 6));
+
+// There are far too many register trees to draw at once: draw the best MAX_TREES inside the (padded) view,
+// recorded trees first, and redraw after every move.
+// Markers that stay in view are kept (so an open popup survives the pan it causes); changing a filter or the
+// species rebuilds all of them.
+const MAX_TREES = 3000, drawn = new Map();   // tree index -> marker
+let drawnKey = "";
+function drawTrees() {
+  $("treeNote").textContent = "";
+  if (!$("showTrees").checked || !TC) { treeLayer.clearLayers(); drawn.clear(); drawnKey = ""; updateTop(); return; }
+  const thr = Math.round(+$("tthr").value * 100), priv = $("showPrivate").checked, onlyRec = $("onlyRec").checked;
+  const genera = new Set([...document.querySelectorAll("#genera input:checked")].map(i => i.value));
+  const key = [sp, thr, priv, onlyRec, [...genera].join()].join("|");
+  if (key !== drawnKey) { treeLayer.clearLayers(); drawn.clear(); drawnKey = key; }
+  const b = map.getBounds().pad(0.25), list = [], scope = treesInScope(b);
+  for (const t of scope) {
+    const s = t.c["s_" + sp][t.i], rec = isRec(t, sp);
+    if (!rec && (onlyRec || s <= 0 || s < thr || !genera.has(t.g))) continue;
+    if (!priv && t.c.private[t.i]) continue;
+    if (!b.contains(t.ll)) continue;
+    list.push({ t, s: s / 100, rec });
+  }
+  list.sort((a, c) => (c.rec - a.rec) || (c.s - a.s));
+  if (list.length > MAX_TREES) $("treeNote").textContent = `Showing the best ${MAX_TREES} of ${list.length.toLocaleString()} trees around this view; zoom in for the rest.`;
+  else if (PHONE && scope === overviewTrees) $("treeNote").textContent = "Zoomed out: only each species' best trees and the recorded trees are shown; zoom in for all trees.";
+  const shown = list.slice(0, MAX_TREES), keep = new Set(shown.map(x => x.t.id));
+  for (const [id, m] of drawn) if (!keep.has(id)) { treeLayer.removeLayer(m); drawn.delete(id); }
+  for (const { t, s, rec } of shown.reverse()) {   // best drawn last, on top
+    const old = drawn.get(t.id);
+    if (old) { old.setRadius(old.k * treeRadius(rec ? Math.max(s, 0.6) : s)); continue; }
+    const p = props(t), k = p.src === "monumental" || rec ? 1 : 0.7;   // register trees a bit smaller
+    const m = L.circleMarker(t.ll, { renderer: treeRenderer, radius: k * treeRadius(rec ? Math.max(s, 0.6) : s),
+      color: rec ? "#2e7d32" : p.private ? "#555" : "#2b1a10", weight: rec ? 3 : 1, dashArray: p.private ? "2 2" : null,
+      fillColor: css(LUT[Math.round(s * 250)]), fillOpacity: 0.95, bubblingMouseEvents: false });
+    Object.assign(m, { p, s, rec, k });
+    if (PHONE) m.on("click", () => showTree(m));
+    else m.bindPopup(() => treePopup(p, s), { maxWidth: 340 });
+    m.addTo(treeLayer);
+    drawn.set(t.id, m);
+  }
+  updateTop();
+}
+
+function updateTop() {
+  const b = map.getBounds(), list = [];
+  treeLayer.eachLayer(m => { if (b.contains(m.getLatLng())) list.push(m); });
+  list.sort((a, c) => (c.rec - a.rec) || (c.s - a.s));
+  $("top").innerHTML = "";
+  if (!list.length) { $("top").innerHTML = '<li class="muted">No trees in view.</li>'; return; }
+  for (const m of list.slice(0, 15)) {
+    const p = m.p, li = document.createElement("li");
+    const a = ACCESS[p.access] || ACCESS.unclear;
+    li.innerHTML = `<span><span class="dot" style="background:${a.color}" title="Picking: ${a.label}"></span>${esc(treeTitle(p))}${p.private ? " · <i>private</i>" : ""}</span><span>${m.rec ? "★ " : ""}${m.s.toFixed(2)}</span>`;
+    li.onclick = () => { map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); showTree(m); };
+    $("top").appendChild(li);
+  }
+}
+map.on("moveend", () => { if (TC) drawTrees(); });
+
+// ---------------------------------------------------------------- iNaturalist finds (records.json, step 08)
+// Rows: [lat, lng, date, uncertainty_m, observer, url, licence, taxon]. Few enough to draw all of a species.
+const FIND_ICON = L.divIcon({ className: "", html: '<div class="find"></div>', iconSize: [12, 12], iconAnchor: [6, 6] });
+// Phone: same diamond inside a 32 px touch target
+const FIND_ICON_BIG = L.divIcon({ className: "", html: '<div class="find" style="margin:10px"></div>', iconSize: [32, 32], iconAnchor: [16, 16] });
+const findRows = () => (finds && finds.species[sp]) || [];
+function findPopup(r) {
+  const [, , date, unc, by, url, lic, taxon] = r;
+  return `<div class="pop"><h3>${esc(SP.label)}: iNaturalist find</h3><i>${esc(taxon)}</i><br>
+    ${esc(date) || "date unknown"}${by ? ` · by ${esc(by)}` : ""}<br>
+    <span class="muted">Location accurate to ±${Math.round(unc)} m (circle) · ${esc(lic)}</span><br>
+    ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Observation on iNaturalist ↗</a>` : ""}</div>`;
+}
+function drawFinds() {
+  findLayer.clearLayers();
+  $("nFinds").textContent = finds ? findRows().length : "–";
+  if (!finds || !$("showFinds").checked) return;
+  for (const r of findRows()) {
+    const m = L.marker([r[0], r[1]], { icon: PHONE ? FIND_ICON_BIG : FIND_ICON, keyboard: false, title: `${SP.label} · ${r[2]}` });
+    const circle = () => L.circle([r[0], r[1]], { radius: r[3] || 10, color: "#00897b", weight: 1, fillOpacity: 0.1, interactive: false });
+    if (PHONE) m.on("click", () => openDetail(findPopup(r), circle()));
+    else {
+      m.bindPopup(() => findPopup(r), { maxWidth: 300 });
+      m.on("popupopen", () => { findCircle = circle().addTo(map); });
+      m.on("popupclose", () => { if (findCircle) { map.removeLayer(findCircle); findCircle = null; } });
+    }
+    m.addTo(findLayer);
+  }
+}
+// Nearest find for the "My location" panel
+function nearestFind(ll) {
+  let best = null;
+  for (const r of findRows()) { const d = map.distance(ll, [r[0], r[1]]); if (!best || d < best.d) best = { r, d }; }
+  return best;
+}
+
+// ---------------------------------------------------------------- controls
+function bindRange(id, onChange) {
+  const el = $(id), out = $(id + "v");
+  const show = () => out.textContent = (+el.value).toFixed(2);
+  el.addEventListener("input", show); el.addEventListener("change", onChange); show();
+}
+
+// Weight sliders, view choices and genus checkboxes depend on the species (and, on the phone, on live mode)
+function buildViews() {
+  const avail = live ? Object.entries(VIEWS) : [["score", VIEWS.score]];
+  $("views").innerHTML = avail.map(([k, l]) =>
+    `<label><input type="radio" name="view" value="${k}" ${k === view ? "checked" : ""}> ${l}</label>`).join("")
+    + (live ? "" : '<div class="sub">Single-factor views: tap "Adjust weights" below.</div>');
+}
+function buildWeights() {
+  $("liveBox").hidden = live;
+  if (!live) { $("weights").innerHTML = ""; return; }
+  $("weights").innerHTML = M.factors.map(n =>
+    `<div class="row"><span>${VIEWS[n]}</span><input id="w_${n}" type="range" min="0" max="1" step="0.05" value="${weights[n] ?? 0}"><output id="w_${n}v"></output></div>`).join("");
+  for (const n of M.factors) bindRange("w_" + n, () => {
+    weights[n] = +$("w_" + n).value; $("status").textContent = "Recomputing…";
+    setTimeout(() => { computeScore(); render(); });
+  });
+}
+function buildGenera() {
+  const present = PHONE ? null : new Set(trees.map(t => t.g));   // the phone doesn't hold all trees: list all genera
+  $("genera").innerHTML = Object.keys(SP.genus).filter(g => !present || present.has(g)).map(g =>
+    `<label><input type="checkbox" value="${g}" checked> ${esc(genusName(g))}</label>`).join("")
+    || '<span class="muted">No register trees of this species\' host genera.</span>';
+}
+
+function buildControls() {
+  $("views").addEventListener("change", e => { view = e.target.value; render(); });
+  $("liveBtn").onclick = () => { $("liveBtn").disabled = true; $("liveBtn").textContent = "Loading factor layers…"; goLive(); };
+  bindRange("thr", render);
+  bindRange("opa", () => overlays.forEach(o => o.setOpacity(+$("opa").value)));
+  $("species").innerHTML = Object.entries(M.species).map(([k, s]) =>
+    `<option value="${k}">${esc(s.label)} (${esc(s.nl)})</option>`).join("");
+  $("species").addEventListener("change", e => selectSpecies(e.target.value));
+  $("nMuni").textContent = M.n_registers ?? "–";
+  bindRange("tthr", drawTrees);
+  for (const id of ["showTrees", "showPrivate", "onlyRec"]) $(id).addEventListener("change", drawTrees);
+  $("showFinds").addEventListener("change", drawFinds);
+  $("findsUnc").textContent = finds ? finds.max_uncertainty_m : "–";
+  $("findsDate").textContent = finds ? finds.fetched : "–";
+  $("genera").addEventListener("change", drawTrees);
+  $("accessKey").innerHTML = Object.values(ACCESS).map(a =>
+    `<i style="border-color:${a.color};${a.dash ? "border-top-style:dashed" : ""}"></i><span><b>${a.label}</b>: ${a.help}</span>`).join("");
+  $("accessChecked").textContent = M.access_checked || "–";
+  $("showAccess").addEventListener("change", toggleAccess);
+  $("bylawKey").innerHTML = [["forbidden", "Bylaw ban (whole municipality, forest, or named areas/owners)"],
+    ["unclear", "Ban only at places/species the municipality designates (designation not found)"],
+    ["none", "No bylaw ban on small amounts"]].map(([c, t]) =>
+    `<i style="border-color:${LAW[c].color};border-top-style:dotted"></i><span>${t}</span>`).join("");
+  $("bylawsSearched").textContent = M.bylaws_searched || "–";
+  $("showBylaws").addEventListener("change", toggleBylaws);
+  $("toggle").onclick = () => $("panel").classList.toggle("collapsed");
+  // About & sources popup
+  $("aboutAccess").textContent = M.access_checked || "–";
+  $("aboutBylaws").textContent = M.bylaws_searched || "–";
+  $("aboutFinds").textContent = finds ? finds.fetched : "–";
+  const showAbout = on => { $("about").hidden = !on; };
+  $("aboutBtn").onclick = () => showAbout(true);
+  $("aboutClose").onclick = () => showAbout(false);
+  $("about").addEventListener("click", e => { if (e.target.id === "about") showAbout(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") showAbout(false); });
+}
+
+(async () => {
+  try {
+    M = await get("data/manifest.json", "json");
+    W = M.width; H = M.height; N = W * H;
+    // Desktop: shared factor layers and all trees now; each species' host/soil layers when first selected.
+    // Phone: only the tree overview here; tiles, score images and (after "Adjust weights") factor layers on demand.
+    const [arrs, tj, acc, law, rec] = await Promise.all([PHONE ? [] : Promise.all(M.shared.map(loadGray)),
+      get(PHONE ? "data/trees/overview.json" : "data/trees.json", "json"),
+      get("data/access.geojson", "json").catch(() => ({ features: [] })),
+      get("data/bylaws.geojson", "json").catch(() => ({ features: [] })),
+      get("data/records.json", "json").catch(() => null)]);
+    finds = rec;
+    log(`data loaded: ${tj.n} trees, ${acc.features.length} rule areas, ${rec ? Object.values(rec.species).flat().length : 0} finds`);
+    if (!PHONE) M.shared.forEach((n, k) => layers[n] = arrs[k]);
+    tileSet = new Set(M.tree_tiles?.ids || []);
+    accessFeatures = acc.features.filter(f => f.geometry);
+    bylawFeatures = law.features.filter(f => f.geometry);
+    for (const f of [...accessFeatures, ...bylawFeatures]) f.bbox = bboxOf(f.geometry);
+    // GDAL may write `entries` as a JSON array or as a JSON string
+    for (const f of bylawFeatures) {
+      const e = f.properties.entries;
+      f.properties.parsed = typeof e === "string" ? JSON.parse(e) : e;
+    }
+    TC = tj.cols;   // trees are loaded (desktop: all; phone: the overview)
+    trees = makeTrees(tj, PHONE ? "ov" : "all");
+    if (PHONE) overviewTrees = trees;
+    score = new Uint8Array(N);
+    buildControls();
+    await selectSpecies(hashSpecies || M.default_species);
+  } catch (err) {
+    showError("failed to load data: " + err.message + (location.hostname === "localhost" ? " (start the server with serve.ps1, see README)" : ""));
+  }
+})();
+</script>
+</body>
+</html>
